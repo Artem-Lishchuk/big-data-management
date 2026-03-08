@@ -2,10 +2,12 @@
 
 # CORRECTNESS
 
-Raw input rows:        7052769
-After cleaning rows:   5591610
-After dedup rows:      5590943
-Final output rows:     5590943
+## Row counts
+
+Raw input rows:        7052769 <br>
+After cleaning rows:   5591610 <br>
+After dedup rows:      5590943 <br>
+Final output rows:     5590943 <br>
 
 ## EXAMPLE OF BAD ROWS:
 
