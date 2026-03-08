@@ -15,17 +15,7 @@ Final output rows:     5590943 <br>
 
 ## RULES FOR BAD ROWS:
 
-bad_trips = df.filter( <br>
-        (F.col("tpep_pickup_datetime").isNull()) <br>
-        | (F.col("tpep_dropoff_datetime").isNull()) <br>
-        | (F.col("PULocationID").isNull()) <br>
-        | (F.col("DOLocationID").isNull()) <br>
-        | (F.col("passenger_count").isNull() | (F.col("passenger_count") < 0)) <br>
-        | (F.col("trip_distance").isNull() | (F.col("trip_distance") < 0)) <br>
-        | (F.col("fare_amount").isNull() | (F.col("fare_amount") < 0)) <br>
-        | (F.col("tip_amount").isNull() | (F.col("tip_amount") < 0)) <br>
-    )
-
+<img width="553" height="237" alt="image" src="https://github.com/user-attachments/assets/e69602e9-810c-4f15-8eac-a3562e9d9cc8" />
 
 # PERFORMANCE
 
