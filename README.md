@@ -40,17 +40,8 @@ After each run, compute the top 5 pickup zones by total trip count across all pr
 
 For this, the enriched parque file was read back in so it matches all historical data, the lookup file was read in and these were joined and grouped by zones with all trips aggregated.
 
-top_zones = (
-        df.groupBy("pickup_location_id", "pickup_zone_name")
-        .agg(F.count("*").alias("trip_count"))
-        .orderBy(F.col("trip_count").desc())
-        .limit(5)
-        .join(zones.select("LocationID", "Borough"), 
-            F.col("pickup_location_id") == F.col("LocationID"), "left")
-        .withColumnRenamed("pickup_zone_name", "zone")
-        .withColumnRenamed("Borough", "borough")
-        .select("zone", "borough", "trip_count")
-    )
+<img width="514" height="243" alt="image" src="https://github.com/user-attachments/assets/cf2d6a13-16b6-4d28-afd9-03bb7b44b474" />
+
 
 Example result:
 
