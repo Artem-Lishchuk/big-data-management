@@ -1,13 +1,13 @@
 
 
-## CORRECTNESS
+# CORRECTNESS
 
 Raw input rows:        7052769
 After cleaning rows:   5591610
 After dedup rows:      5590943
 Final output rows:     5590943
 
-# EXAMPLE OF BAD ROWS:
+## EXAMPLE OF BAD ROWS:
 
 +--------+--------------------+---------------------+---------------+-------------+----------+------------------+------------+------------
 |VendorID|tpep_pickup_datetime|tpep_dropoff_datetime|fare_amount|extra|mta_tax|tip_amount|tolls_amount|improvement_surcharge|total_amount|
@@ -17,7 +17,7 @@ Final output rows:     5590943
 |2       |2025-01-01 00:56:12 |2025-01-01 01:15:00  |-16.3      |-1.0 |-0.5   |0.0       |0.0         |-1.0                 |-21.3       |
 +--------+--------------------+---------------------+---------------+-------------+----------+------------------+------------+------------
 
-# RULES FOR BAD ROWS:
+## RULES FOR BAD ROWS:
 
 bad_trips = df.filter(
         (F.col("tpep_pickup_datetime").isNull())
@@ -31,7 +31,7 @@ bad_trips = df.filter(
     )
 
 
-## PERFORMANCE
+# PERFORMANCE
 
 Total runtime for the full job when no previous runs done: 88s
 
@@ -42,14 +42,12 @@ Total runtime for the full job when no previous runs done: 88s
 <img width="1839" height="435" alt="image" src="https://github.com/user-attachments/assets/84640ff6-4f68-4671-b34f-a7f5452c9872" />
 
 
-# OPTIMIZATION CHOICES
+## OPTIMIZATION CHOICES
 
 As the write output jobs were the slowest, when there was an output file existing, the cleaned and deduplicated dataframe was cached and materialized before writing, reducing runtime for the writing operation by 20 s, and increasing the operation for dedup by around 6 seconds, giving a total decrease in operation around 14 s. 
 
 
-
-
-## PROJECT SPECIFIC TASK
+# PROJECT SPECIFIC TASK
 
 Scenario
 After each run, compute the top 5 pickup zones by total trip count across all processed data and write to data/outbox/top_zones.parquet with columns: zone, borough, trip_count. Must reflect the full output (recomputed each run, not incrementally appended).
