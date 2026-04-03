@@ -30,6 +30,7 @@ import os
 import sys
 import time
 from datetime import datetime
+from kafka.admin import KafkaAdminClient, NewTopic
 
 # Self-install dependencies so the script works from a fresh Jupyter terminal
 # without needing to run the notebook setup cell first.
@@ -106,6 +107,15 @@ def main() -> None:
 
     print(f"\nConnecting to Kafka at {args.bootstrap} …")
     try:
+        admin = KafkaAdminClient(
+            bootstrap_servers = args.bootstrap
+        )
+        topic = NewTopic(
+            name = args.topic,
+            num_partitions = 3,
+            replication_factor = 1
+        )
+
         producer = KafkaProducer(
             bootstrap_servers=args.bootstrap,
             key_serializer=lambda k: str(k).encode(),
