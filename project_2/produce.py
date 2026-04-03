@@ -106,16 +106,20 @@ def main() -> None:
     interval = 1.0 / args.rate
 
     print(f"\nConnecting to Kafka at {args.bootstrap} …")
-    try:
-        admin = KafkaAdminClient(
-            bootstrap_servers = args.bootstrap
-        )
+    
+    admin = KafkaAdminClient(bootstrap_servers=args.bootstrap)
+    try: 
         topic = NewTopic(
             name = args.topic,
             num_partitions = 3,
             replication_factor = 1
         )
-
+    except TopicAlreadyExistsError:
+        pass
+    finally:
+        admin.close()
+        
+    try:
         producer = KafkaProducer(
             bootstrap_servers=args.bootstrap,
             key_serializer=lambda k: str(k).encode(),
