@@ -46,7 +46,8 @@ _ensure("pyarrow")
 
 import pandas as pd
 from kafka import KafkaProducer
-from kafka.errors import NoBrokersAvailable
+from kafka.errors import NoBrokersAvailable, TopicAlreadyExistsError
+from kafka.admin import KafkaAdminClient, NewTopic
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +106,21 @@ def main() -> None:
     interval = 1.0 / args.rate
 
     print(f"\nConnecting to Kafka at {args.bootstrap} …")
+    
+    admin = KafkaAdminClient(bootstrap_servers=args.bootstrap)
+    try: 
+        topic = NewTopic(
+            name = args.topic,
+            num_partitions = 3,
+            replication_factor = 1
+        )
+        admin.create_topics([topic])
+        print(f"Topic created: {args.topic}")
+    except TopicAlreadyExistsError:
+        pass
+    finally:
+        admin.close()
+        
     try:
         producer = KafkaProducer(
             bootstrap_servers=args.bootstrap,
