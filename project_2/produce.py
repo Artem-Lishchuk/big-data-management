@@ -30,7 +30,6 @@ import os
 import sys
 import time
 from datetime import datetime
-from kafka.admin import KafkaAdminClient, NewTopic
 
 # Self-install dependencies so the script works from a fresh Jupyter terminal
 # without needing to run the notebook setup cell first.
@@ -48,6 +47,7 @@ _ensure("pyarrow")
 import pandas as pd
 from kafka import KafkaProducer
 from kafka.errors import NoBrokersAvailable, TopicAlreadyExistsError
+from kafka.admin import KafkaAdminClient, NewTopic
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +114,8 @@ def main() -> None:
             num_partitions = 3,
             replication_factor = 1
         )
+        admin.create_topics([topic])
+        print(f"Topic created: {args.topic}")
     except TopicAlreadyExistsError:
         pass
     finally:
