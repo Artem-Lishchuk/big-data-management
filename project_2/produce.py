@@ -47,7 +47,7 @@ _ensure("pyarrow")
 
 import pandas as pd
 from kafka import KafkaProducer
-from kafka.errors import NoBrokersAvailable
+from kafka.errors import NoBrokersAvailable, TopicAlreadyExistsError
 
 
 # ---------------------------------------------------------------------------
