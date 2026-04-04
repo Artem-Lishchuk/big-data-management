@@ -74,7 +74,8 @@ services:
 
   # ── Jupyter + PySpark with Kafka and Iceberg connectors ─────────────────────
   jupyter:
-    image: quay.io/jupyter/pyspark-notebook:2025-12-31
+    # Spark 4.0.x — matches iceberg-spark-runtime-4.0_2.13 (Iceberg is not binary-compatible with Spark 4.1+).
+    image: quay.io/jupyter/pyspark-notebook:spark-4.0.1
     container_name: project2_jupyter
     depends_on:
       - kafka
@@ -93,10 +94,8 @@ services:
       # • spark-sql-kafka      — Kafka source/sink for Structured Streaming
       # • iceberg-spark-runtime — Iceberg table format + SparkCatalog
       # • iceberg-aws-bundle   — shaded AWS SDK v2 for S3FileIO (no classpath conflict)
-      # pyspark-notebook:2025-12-31 ships Spark 4.1.0 (Scala 2.13).
-      # iceberg-spark-runtime-4.0_2.13 is the latest Iceberg runtime compatible with Spark 4.x.
-      # Update versions if Cell 1 reports a different Spark version.
-      - PYSPARK_SUBMIT_ARGS=--packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.0,org.apache.iceberg:iceberg-spark-runtime-4.0_2.13:1.10.0,org.apache.iceberg:iceberg-aws-bundle:1.10.0 pyspark-shell
+      # Image tag spark-4.0.1 — keep spark-sql-kafka on the same Spark minor line as the notebook.
+      - PYSPARK_SUBMIT_ARGS=--packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.1,org.apache.iceberg:iceberg-spark-runtime-4.0_2.13:1.10.0,org.apache.iceberg:iceberg-aws-bundle:1.10.0 pyspark-shell
     command: >
       start-notebook.py
       --ServerApp.token=${JUPYTER_TOKEN}
