@@ -26,7 +26,7 @@ DOLocationID, dropoff_zone, dropoff_borough, passenger_count,
 trip_distance, fare_amount, tip_amount, tolls_amount...
 
 
-The binary `value` has been decoded, parsed and enriched. Key differences from bronze:
+The binary column value has been decoded, parsed and enriched. Key differences from bronze:
 - Binary → typed columns (timestamps, doubles, bigints)
 - Zone IDs joined to pickup_zone, pickup_borough
 - Derived column trip_duration_min calculated from pickup/dropoff times
@@ -64,7 +64,7 @@ All gold (and silver) tables are partitioned by pickup_date, organizing data int
 
 <img width="599" height="545" alt="image" src="https://github.com/user-attachments/assets/ad0c8920-9fa7-4413-9a38-799748172ff0" />
 
-## Custom scenario
+# Custom scenario
 
 [
   {
