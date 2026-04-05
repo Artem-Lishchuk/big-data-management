@@ -8,7 +8,7 @@
 
 ## Medallion layer description
 
-### Bronze — `bronze_raw_events`
+### Bronze — bronze_raw_events
 
 Schema:
 
@@ -16,7 +16,7 @@ key, value (BINARY), topic, partition, offset, timestamp, timestampType
 
 ---
 
-### Silver — `silver_trips`
+### Silver — silver_trips
 
 Schema:
 
@@ -28,8 +28,8 @@ trip_distance, fare_amount, tip_amount, tolls_amount...
 
 The binary `value` has been decoded, parsed and enriched. Key differences from bronze:
 - Binary → typed columns (timestamps, doubles, bigints)
-- Zone IDs joined to human-readable `pickup_zone`, `pickup_borough`
-- Derived column `trip_duration_min` calculated from pickup/dropoff times
+- Zone IDs joined to pickup_zone, pickup_borough
+- Derived column trip_duration_min calculated from pickup/dropoff times
 - Bad/null records filtered out
 
 ---
