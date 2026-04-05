@@ -1,35 +1,30 @@
-## Streaming correctness
+# Streaming correctness
 
 <img width="785" height="434" alt="image" src="https://github.com/user-attachments/assets/39fd57c8-2fa7-4d98-9251-498b8474c89c" />
 
 <img width="523" height="213" alt="image" src="https://github.com/user-attachments/assets/8c899c00-c922-40fe-9f12-93ded74dfa67" />
 
-## Lakehouse design
+# Lakehouse design
 
-# Medallion Layer Schema Description
-
----
+## Medallion layer description
 
 ### Bronze — `bronze_raw_events`
 
-**Schema:**
-```
-key, value (BINARY), topic, partition, offset, timestamp, timestampType
-```
+Schema:
 
-Raw Kafka payload — no transformation whatsoever. The actual trip data is still locked inside the `value` column as binary. This layer is about **faithful capture** — store exactly what Kafka delivered, nothing more. Useful for reprocessing from scratch if downstream logic changes.
+key, value (BINARY), topic, partition, offset, timestamp, timestampType
 
 ---
 
 ### Silver — `silver_trips`
 
-**Schema:**
-```
+Schema:
+
 VendorID, pickup_datetime, dropoff_datetime, trip_duration_min,
 pickup_date, PULocationID, pickup_zone, pickup_borough,
 DOLocationID, dropoff_zone, dropoff_borough, passenger_count,
 trip_distance, fare_amount, tip_amount, tolls_amount...
-```
+
 
 The binary `value` has been decoded, parsed and enriched. Key differences from bronze:
 - Binary → typed columns (timestamps, doubles, bigints)
@@ -39,31 +34,31 @@ The binary `value` has been decoded, parsed and enriched. Key differences from b
 
 ---
 
-### Gold — three aggregated tables
+### Gold tables
 
-#### `gold_trips_per_hour`
-```
+#### gold_trips_per_hour:
+
 pickup_date, pickup_hour, trip_count
-```
-Silver rows collapsed into hourly trip counts — one row per hour, not per trip.
 
-#### `gold_revenue_per_zone`
-```
+Silver rows collapsed into hourly trip counts, one row per hour.
+
+#### gold_revenue_per_zone:
+
 pickup_date, pickup_location_id, pickup_borough, pickup_zone, total_revenue
-```
+
 Silver rows aggregated into total revenue per zone per day.
 
-#### `gold_average_fare_per_zone`
-```
+#### gold_average_fare_per_zone:
+
 pickup_date, pickup_location_id, pickup_borough, pickup_zone, average_fare
-```
+
 Silver rows aggregated into average fare per zone per day.
 
 ---
 
 ### Gold partitioning strategy
 
-All gold tables (and silver tables) are partitioned by pickup_date, organizing data into daily partitions on MinIO. This aligns with the natural time-based query patterns, allows Iceberg to skip irrelevant partitions via partition pruning, and ensures each batch job writes only to its own date partition without affecting historical data.
+All gold (and silver) tables are partitioned by pickup_date, organizing data into daily partitions. This ensures each batch job writes only to its own date partition without affecting historical data.
 
 ### Snapshot history
 
