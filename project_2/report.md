@@ -61,6 +61,8 @@ Silver rows aggregated into average fare per zone per day.
 All gold (and silver) tables are partitioned by pickup_date, organizing data into daily partitions. This ensures each batch job writes only to its own date partition without affecting historical data.
 
 ### Snapshot history
+<img width="505" height="107" alt="image" src="https://github.com/user-attachments/assets/3b338427-e942-4543-bfa8-c475af463643" />
+
 
 <img width="599" height="545" alt="image" src="https://github.com/user-attachments/assets/ad0c8920-9fa7-4413-9a38-799748172ff0" />
 
