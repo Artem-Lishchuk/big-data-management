@@ -1,0 +1,194 @@
+# =============================================================================
+# Week 06 — Pipeline Orchestration with Apache Airflow
+#
+# Extends the Week 05 CDC stack with:
+#   - Apache Airflow 2.10 (standalone: scheduler + webserver in one container)
+#
+# Services:
+#   postgres  :5432   — OLTP source; wal_level=logical for Debezium
+#   kafka     :9092   — KRaft broker
+#   connect   :8083   — Debezium Kafka Connect (CDC source connector)
+#   airflow   :8080   — DAG scheduler + UI
+#   jupyter   :8888   — PySpark notebook environment (runs the practice)
+#
+# Usage:
+#   cp .env.example .env
+#   docker compose up -d
+#   docker compose down -v   (clean shutdown, removes volumes)
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Kafka broker — KRaft mode, no ZooKeeper
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: apache/kafka:3.9.2
+    container_name: week06_kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qg
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — OLTP source for CDC
+  # wal_level=logical enables the Write-Ahead Log output needed for Debezium
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: week06_postgres
+    environment:
+      POSTGRES_DB: sourcedb
+      POSTGRES_USER: ${PG_USER:-cdc_user}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-admin}
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_replication_slots=4"
+      - "-c"
+      - "max_wal_senders=4"
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-cdc_user} -d sourcedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # Kafka Connect + Debezium PostgreSQL connector
+  # ---------------------------------------------------------------------------
+  connect:
+    image: quay.io/debezium/connect:3.0
+    container_name: week06_connect
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8084:8083"
+    environment:
+      GROUP_ID: 1
+      BOOTSTRAP_SERVERS: kafka:9092
+      CONFIG_STORAGE_TOPIC: _connect_configs
+      OFFSET_STORAGE_TOPIC: _connect_offsets
+      STATUS_STORAGE_TOPIC: _connect_statuses
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Apache Airflow — standalone mode (scheduler + webserver in one container)
+  # SequentialExecutor + SQLite: fine for single-node practice
+  # DAGs are mounted from ./dags so you can edit them live
+  # ---------------------------------------------------------------------------
+  airflow:
+    image: apache/airflow:2.10.5-python3.11
+    container_name: week06_airflow
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      connect:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+      - AIRFLOW__WEBSERVER__SECRET_KEY=bdm-week06-secret
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - KAFKA_BOOTSTRAP=kafka:9092
+      - CONNECT_URL=http://connect:8083
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_DB=sourcedb
+      - PG_USER=${PG_USER:-cdc_user}
+      - PG_PASSWORD=${PG_PASSWORD:-admin}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - airflow-data:/opt/airflow
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username "${AIRFLOW_USER:-admin}" \
+          --password "${AIRFLOW_PASSWORD:-admin}" \
+          --firstname Admin --lastname User \
+          --role Admin --email admin@example.com 2>/dev/null || true
+        exec airflow standalone
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
+
+  # ---------------------------------------------------------------------------
+  # Jupyter + PySpark — notebook environment for the practice
+  # The whole week06/ directory is mounted so the notebook can write to dags/
+  # ---------------------------------------------------------------------------
+  jupyter:
+    image: quay.io/jupyter/pyspark-notebook:2025-12-31
+    container_name: week06_jupyter
+    depends_on:
+      - kafka
+      - postgres
+      - connect
+    ports:
+      - "8889:8888"
+      - "4041:4040"
+    volumes:
+      - ./:/home/jovyan/project
+    environment:
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-admin}
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_DB=sourcedb
+      - PG_USER=${PG_USER:-cdc_user}
+      - PG_PASSWORD=${PG_PASSWORD:-admin}
+      - KAFKA_BOOTSTRAP=kafka:9092
+      - CONNECT_URL=http://connect:8083
+      - PYSPARK_SUBMIT_ARGS=--packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.0 pyspark-shell
+    command: >
+      start-notebook.py
+      --ServerApp.token=${JUPYTER_TOKEN:-admin}
+      --ServerApp.password=''
+      --ServerApp.allow_origin='*'
+      --ServerApp.allow_remote_access=True
+
+volumes:
+  pg-data:
+  airflow-data:
