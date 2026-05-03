@@ -1,107 +1,119 @@
-from airflow import DAG
-import subprocess
-from airflow.operators.python import ShortCircuitOperator, PythonOperator
-from airflow.operators.bash import BashOperator
-from datetime import datetime, timedelta
-import requests
 import json
 import logging
+import os
+from datetime import datetime, timedelta
 
-# 1. The Python function that acts as the "Circuitbreaker"
-def check_spark_offsets():
-       
-    
-    # Use the same packages you use in your Bronze/Silver scripts
-    cmd = f"docker exec jupyter spark-submit /home/jovyan/project/work/check_offsets.py"
-    
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    
-    # Log it so you can see why it might be failing
-    print(f"STDOUT: {result.stdout}")
-    print(f"STDERR: {result.stderr}")
-    
-    return "DATA_FOUND" in result.stdout
+import requests
+from airflow import DAG
+from airflow.operators.bash import BashOperator
 
-def register_connector():
-    connect_url = 'http://connect:8083/connectors'
-    connector_id = 'pg-cdc-connector'
 
-    # 1. Check if the connector is already registered
-    status = requests.get(f'{connect_url}/{connector_id}/status')
-    if status.status_code == 200:
-        logging.info(f"Connector '{connector_id}' is already registered and running.")
+LOGGER = logging.getLogger(__name__)
+JUPYTER_CONTAINER = os.environ.get("PROJECT3_JUPYTER_CONTAINER", "jupyter")
+PIPELINE_ENTRYPOINT = "/home/jovyan/project/jobs/pipeline.py"
+SCHEDULE = "*/10 * * * *"
+
+
+def send_failure_alert(context):
+    task_instance = context["task_instance"]
+    message = {
+        "dag_id": context["dag"].dag_id,
+        "task_id": task_instance.task_id,
+        "run_id": context["run_id"],
+        "try_number": task_instance.try_number,
+        "logical_date": str(context.get("logical_date")),
+        "log_url": task_instance.log_url,
+    }
+
+    LOGGER.error("Project 3 pipeline task failed: %s", json.dumps(message))
+
+    webhook_url = os.environ.get("ALERT_WEBHOOK_URL")
+    if not webhook_url:
         return
 
-    # 2. If not found, register the connector
-    logging.info("Connector not found. Registering...")
-    cfg = {
-        'name': connector_id,
-        'config': {
-            'connector.class': 'io.debezium.connector.postgresql.PostgresConnector',
-            'database.hostname': 'postgres',
-            'database.port': '5432',
-            'database.user': 'cdc_user',
-            'database.password': 'admin',
-            'database.dbname': 'sourcedb',
-            'topic.prefix': 'dbserver1',
-            'table.include.list': 'public.customers',
-            'plugin.name': 'pgoutput',
-            'snapshot.mode': 'initial',
-            'key.converter.schemas.enable': 'false',
-            'value.converter.schemas.enable': 'false',
-        }
-    }
-    
     response = requests.post(
-        connect_url,
-        headers={'Content-Type': 'application/json'},
-        data=json.dumps(cfg)
+        webhook_url,
+        headers={"Content-Type": "application/json"},
+        data=json.dumps({"text": json.dumps(message)}),
+        timeout=10,
     )
-    
-    # 3. Raise an exception if it fails (This tells Airflow to mark the task as FAILED)
     response.raise_for_status()
-    logging.info(f"Successfully created connector: {response.status_code}")
+
+
+def jupyter_python_command(*args):
+    command = " ".join(args)
+    return (
+        f"docker exec {JUPYTER_CONTAINER} "
+        f"python {PIPELINE_ENTRYPOINT} {command}"
+    )
+
 
 default_args = {
-    'retries': 3,
-    'retry_delay': timedelta(minutes=2),
-    'retry_exponential_backoff': True,
-    'max_retry_delay': timedelta(minutes=10),
-    'sla': timedelta(minutes=30),
+    "owner": "airflow",
+    "depends_on_past": False,
+    "retries": 2,
+    "retry_delay": timedelta(minutes=2),
+    "retry_exponential_backoff": True,
+    "max_retry_delay": timedelta(minutes=10),
+    "execution_timeout": timedelta(minutes=15),
+    "on_failure_callback": send_failure_alert,
+    "sla": timedelta(minutes=30),
 }
-# ── DAG Definition ────────────────────────────────────────────────────────────
+
+
 with DAG(
-    'cdc_iceberg_pipeline',
-    start_date=datetime(2026, 4, 29),
-    schedule_interval='@hourly',
+    dag_id="project3_lakehouse_pipeline",
+    description="End-to-end CDC + taxi medallion pipeline for Project 3.",
+    start_date=datetime(2026, 5, 1),
+    schedule=SCHEDULE,
     catchup=False,
     max_active_runs=1,
+    dagrun_timeout=timedelta(minutes=40),
     default_args=default_args,
+    tags=["project-3", "cdc", "iceberg", "airflow"],
 ) as dag:
-    
-    PACKAGES = (
-    "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.0,"
-    "org.apache.iceberg:iceberg-spark-runtime-4.0_2.13:1.10.0,"
-    "org.apache.iceberg:iceberg-aws-bundle:1.10.0"
+    register_connector = BashOperator(
+        task_id="register_connector",
+        bash_command=jupyter_python_command("register-debezium"),
     )
 
-
-    # Task 1: Setup Debezium
-    setup_cdc = BashOperator(
-        task_id='register_debezium',
-        bash_command=f'docker exec jupyter python /home/jovyan/project/work/register_debezium.py'
-    )
-    
-
-    run_bronze = BashOperator(
-        task_id='spark_bronze',
-        bash_command=f'docker exec jupyter spark-submit --packages {PACKAGES} /home/jovyan/project/work/spark_bronze.py'
+    connector_health_check = BashOperator(
+        task_id="connector_health_check",
+        bash_command=jupyter_python_command("connector-health-check"),
     )
 
-    run_silver = BashOperator(
-        task_id='spark_silver',
-        bash_command=f'docker exec jupyter spark-submit --packages {PACKAGES} /home/jovyan/project/work/spark_silver.py'
+    bronze_cdc = BashOperator(
+        task_id="bronze_cdc",
+        bash_command=jupyter_python_command("bronze-cdc"),
     )
 
-    # Define Dependencies
-    setup_cdc >> run_bronze >> run_silver
+    bronze_taxi = BashOperator(
+        task_id="bronze_taxi",
+        bash_command=jupyter_python_command("bronze-taxi"),
+    )
+
+    silver_cdc = BashOperator(
+        task_id="silver_cdc",
+        bash_command=jupyter_python_command("silver-cdc"),
+    )
+
+    silver_taxi = BashOperator(
+        task_id="silver_taxi",
+        bash_command=jupyter_python_command("silver-taxi"),
+    )
+
+    gold_taxi = BashOperator(
+        task_id="gold_taxi",
+        bash_command=jupyter_python_command("gold-taxi"),
+    )
+
+    validation = BashOperator(
+        task_id="validation",
+        bash_command=jupyter_python_command("validate"),
+    )
+
+    register_connector >> connector_health_check
+    connector_health_check >> [bronze_cdc, bronze_taxi]
+    bronze_cdc >> silver_cdc
+    bronze_taxi >> silver_taxi >> gold_taxi
+    [silver_cdc, gold_taxi] >> validation
