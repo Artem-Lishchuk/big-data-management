@@ -81,7 +81,57 @@ services:
       /bin/sh -c "ollama pull ${OLLAMA_MODEL:-qwen2.5:3b} && echo 'ollama model ready'"
     restart: "no"
 
+  airflow:
+    image: apache/airflow:2.10.5-python3.11
+    container_name: airflow
+    user: root
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW_USER: ${AIRFLOW_USER:-admin}
+      AIRFLOW_PASSWORD: ${AIRFLOW_PASSWORD:-admin}
+      POSTGRES_DSN: postgresql://${POSTGRES_USER:-rico}:${POSTGRES_PASSWORD:-rico}@postgres:5432/${POSTGRES_DB:-rico}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-rico-raw}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      PYTHONPATH: /opt/project
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/opt/project
+      - ./dags:/opt/airflow/dags
+      - airflow-data:/opt/airflow
+    entrypoint:
+      [
+        "/bin/bash",
+        "-c",
+        "set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; if ! command -v docker >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends ca-certificates curl docker.io && apt-get clean && rm -rf /var/lib/apt/lists/*; fi; if [ ! -f /opt/airflow/.rico-pipeline-installed ]; then su -m -s /bin/bash airflow -c 'pip install -e /opt/project' && touch /opt/airflow/.rico-pipeline-installed; fi; su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow db migrate'; su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow users create --username ${AIRFLOW_USER:-admin} --password ${AIRFLOW_PASSWORD:-admin} --firstname Admin --lastname User --role Admin --email admin@example.com 2>/dev/null || true'; su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow scheduler' & exec su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow webserver'",
+      ]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
 volumes:
   postgres-data:
   minio-data:
   ollama-data:
+  airflow-data:

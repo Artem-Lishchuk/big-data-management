@@ -14,6 +14,7 @@ make up
 ```bash
 docker compose up -d --wait postgres minio ollama
 docker compose up -d minio-init ollama-init
+docker compose up -d --wait airflow
 ```
 
 ### 2. Create and activate a Python virtual environment
@@ -38,12 +39,17 @@ Your shell prompt should show `(.venv-lab)`.
 
 ### 3. Install Python dependencies
 
+All Python packages are declared in `pyproject.toml`:
+
 ```bash
 pip install --upgrade pip
-pip install -e ".[dev]" jupyterlab
+pip install -e ".[dev]"
 ```
 
 The install is large (~2–3 GB) because of PyTorch and the embedding models.
+
+Airflow installs the same project automatically on first container start (`pip install -e /opt/project`).
+Re-run `make airflow-install` after you change dependencies in `pyproject.toml`.
 
 ### 4. Open the lab notebook
 

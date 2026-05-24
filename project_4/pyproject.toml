@@ -25,9 +25,10 @@ dependencies = [
     "huggingface_hub<0.24",
     "fsspec<2024.4",
 
-    # Image handling
+    # Image handling + notebook display
     "pillow>=10.0",
     "numpy>=1.26",
+    "pandas>=2.2",
 
     # ML models (same as lab notebook)
     "torch>=2.4",
@@ -39,8 +40,9 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
-    # Only for running/importing DAGs locally outside Docker
-    "apache-airflow>=2.10",
+    "jupyterlab>=4.0",
+    "ipykernel>=6.29",
+    "matplotlib>=3.8",
 ]
 
 [tool.hatch.build.targets.wheel]
