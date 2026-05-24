@@ -1,0 +1,47 @@
+# --- Virtual environments ---
+.venv-lab/
+.venv/
+venv/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+
+# --- ML / dataset caches (HF, torch, datasets) ---
+.cache/
+.huggingface/
+.torch/
+
+# --- Logs / temp files ---
+*.log
+logs/
+*.tmp
+
+# --- Notebook exports ---
+*.html
+*.pdf
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

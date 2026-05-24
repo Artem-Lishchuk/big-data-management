@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rico-pipeline"
+version = "0.1.0"
+description = "RICO multimodal pipeline — Airflow DAG + task modules"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    # Postgres + pgvector
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3",
+
+    # MinIO (S3) + Ollama HTTP
+    "boto3>=1.35",
+    "requests>=2.32",
+
+    # HuggingFace dataset ingest
+    # Pin <3 so rootsautomation/RICO-Screen2Words still loads (same as week07 lab)
+    "datasets<3",
+    "huggingface_hub<0.24",
+    "fsspec<2024.4",
+
+    # Image handling
+    "pillow>=10.0",
+    "numpy>=1.26",
+
+    # ML models (same as lab notebook)
+    "torch>=2.4",
+    "open-clip-torch>=2.30",
+    "sentence-transformers>=3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    # Only for running/importing DAGs locally outside Docker
+    "apache-airflow>=2.10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["rico_pipeline"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "rico_pipeline",
+    "prompts",
+    "migrations",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
