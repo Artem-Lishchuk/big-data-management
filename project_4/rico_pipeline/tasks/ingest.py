@@ -39,14 +39,11 @@ def run_ingest(**context):
     dag_run_id = context["dag_run"].run_id
     limit = context["params"].get("limit")
 
-    print(f"Running ingest for DAG run {dag_run_id}, limit={limit}")
-
     ds = load_dataset("rootsautomation/RICO-Screen2Words", split="train", streaming=True, trust_remote_code=True)
     raw_rows: dict[int, dict] = {}
     for row in itertools.islice(ds, limit):
         sid = int(row["screenId"])
         raw_rows[sid] = row
-    print(f"collected {len(raw_rows)} rows: {sorted(raw_rows)}")
 
     run_id = get_pipeline_run_id(context)
     s3 = s3_client()
@@ -56,5 +53,3 @@ def run_ingest(**context):
         for sid, row in raw_rows.items():
             _ingest_screen(sid, row, run_id=run_id, s3=s3, bucket=bucket, cur=cur)
         conn.commit()
-
-    return {"screens_ingested": len(raw_rows)}

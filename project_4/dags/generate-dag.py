@@ -5,6 +5,7 @@ from airflow.operators.python import PythonOperator
 
 from rico_pipeline.tasks.ingest import run_ingest
 from rico_pipeline.tasks.init import init_run
+from rico_pipeline.tasks.parse import run_parse
 from rico_pipeline.tasks.finalize import finalize_run
 
 with DAG(
@@ -24,7 +25,11 @@ with DAG(
     ingest = PythonOperator(
         task_id="ingest",
         python_callable=run_ingest,
-        op_kwargs={"limit": 10},
+    )
+
+    parse = PythonOperator(
+        task_id ="parse",
+        python_callable=run_parse,
     )
 
     finalize = PythonOperator(
@@ -33,4 +38,4 @@ with DAG(
         trigger_rule = "all_done"
     )
 
-    init >> ingest >> finalize
+    init >> ingest >> parse >> finalize

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS screens_metadata (
     hierarchy_json_path TEXT NOT NULL,
     extraction_payload  JSONB,
     prompt_version      TEXT,
+    text_representation TEXT,
     confidence          DOUBLE PRECISION,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
