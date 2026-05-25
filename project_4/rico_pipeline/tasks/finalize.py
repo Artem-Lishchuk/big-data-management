@@ -1,6 +1,8 @@
 import psycopg
-import os
+
 from rico_pipeline import utils
+from rico_pipeline.config import postgres_dsn
+
 
 def finalize_run(**context):
     run_uuid = utils.get_pipeline_run_id(context)
@@ -8,7 +10,7 @@ def finalize_run(**context):
     ingest_state = dag_run.get_task_instance("ingest").state
     status = "success" if ingest_state == "success" else "failed"
 
-    with psycopg.connect(os.environ["POSTGRES_DSN"]) as conn:
+    with psycopg.connect(postgres_dsn()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """

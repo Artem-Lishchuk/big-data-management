@@ -1,15 +1,15 @@
-import os
 import uuid
 import psycopg
+
+from rico_pipeline.config import ollama_model, postgres_dsn
+
 
 def init_run(**context):
     dag_run_id = context["dag_run"].run_id
     run_uuid = uuid.uuid4()
     limit = context["params"].get("limit")
 
-    dsn = os.environ["POSTGRES_DSN"]
-
-    with psycopg.connect(dsn) as conn:
+    with psycopg.connect(postgres_dsn()) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -23,10 +23,10 @@ def init_run(**context):
                     dag_run_id,
                     limit,
                     "git-sha",
-                    os.environ.get("OLLAMA_MODEL"),
-                    "v1"
+                    ollama_model(),
+                    "v1",
                 ),
             )
         conn.commit()
-    
+
     return str(run_uuid)

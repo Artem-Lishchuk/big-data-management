@@ -112,6 +112,9 @@ services:
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
       PYTHONPATH: /opt/project
+      # Tasks run via `su -m airflow` and inherit root's env unless overridden.
+      HOME: /home/airflow
+      HF_HOME: /home/airflow/.cache/huggingface
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/opt/project
@@ -121,7 +124,7 @@ services:
       [
         "/bin/bash",
         "-c",
-        "set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; if ! command -v docker >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends ca-certificates curl docker.io && apt-get clean && rm -rf /var/lib/apt/lists/*; fi; if [ ! -f /opt/airflow/.rico-pipeline-installed ]; then su -m -s /bin/bash airflow -c 'pip install -e /opt/project' && touch /opt/airflow/.rico-pipeline-installed; fi; su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow db migrate'; su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow users create --username ${AIRFLOW_USER:-admin} --password ${AIRFLOW_PASSWORD:-admin} --firstname Admin --lastname User --role Admin --email admin@example.com 2>/dev/null || true'; su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow scheduler' & exec su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow webserver'",
+        "set -euo pipefail; export DEBIAN_FRONTEND=noninteractive; if ! command -v docker >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends ca-certificates curl docker.io && apt-get clean && rm -rf /var/lib/apt/lists/*; fi; su -m -s /bin/bash airflow -c 'mkdir -p /home/airflow/.cache/huggingface'; if [ ! -f /opt/airflow/.rico-pipeline-installed ]; then su -m -s /bin/bash airflow -c 'pip install -e /opt/project' && touch /opt/airflow/.rico-pipeline-installed; fi; su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow db migrate'; su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow users create --username ${AIRFLOW_USER:-admin} --password ${AIRFLOW_PASSWORD:-admin} --firstname Admin --lastname User --role Admin --email admin@example.com 2>/dev/null || true'; su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow scheduler' & exec su -m -s /bin/bash airflow -c '/home/airflow/.local/bin/airflow webserver'",
       ]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
