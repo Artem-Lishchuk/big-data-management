@@ -10,6 +10,9 @@ MINIO_SECRET_KEY ?= minioadmin
 MINIO_BUCKET     ?= rico-raw
 AIRFLOW_USER     ?= admin
 AIRFLOW_PASSWORD ?= admin
+GIT_SHA          ?= $(shell git rev-parse HEAD 2>NUL || git rev-parse HEAD 2>/dev/null || echo unknown)
+
+export GIT_SHA
 
 help:
 	@echo "Lab targets:"
@@ -26,6 +29,7 @@ up:
 	$(COMPOSE) up -d minio-init ollama-init
 	$(COMPOSE) up -d --wait airflow
 	@echo "Airflow UI: http://localhost:8080 ($(AIRFLOW_USER)/$(AIRFLOW_PASSWORD))"
+	@echo "GIT_SHA: $(GIT_SHA)"
 
 airflow-install:
 	$(COMPOSE) exec airflow su -m -s /bin/bash airflow -c "pip install -e /opt/project"

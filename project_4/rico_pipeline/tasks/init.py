@@ -1,8 +1,13 @@
 import uuid
 import psycopg
 
-from rico_pipeline.config import ollama_model, postgres_dsn
-
+from rico_pipeline.config import (
+    clip_version,
+    git_sha,
+    ollama_model,
+    postgres_dsn,
+    sbert_version,
+)
 
 def init_run(**context):
     dag_run_id = context["dag_run"].run_id
@@ -15,14 +20,16 @@ def init_run(**context):
                 """
                 INSERT INTO pipeline_runs (
                     run_id, dag_run_id, status, limit_param,
-                    git_sha, llm_model, prompt_version
-                ) VALUES (%s, %s, 'running', %s, %s, %s, %s)
+                    git_sha, clip_version, sbert_version, llm_model, prompt_version
+                ) VALUES (%s, %s, 'running', %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     run_uuid,
                     dag_run_id,
                     limit,
-                    "git-sha",
+                    git_sha(),
+                    clip_version(),
+                    sbert_version(),
                     ollama_model(),
                     "v1",
                 ),

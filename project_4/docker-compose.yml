@@ -111,6 +111,9 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-rico-raw}
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      CLIP_VERSION: ${CLIP_VERSION:-open-clip-ViT-B-32-laion2b-s34b-b79k}
+      SBERT_VERSION: ${SBERT_VERSION:-sentence-transformers/all-MiniLM-L6-v2}
+      GIT_SHA: ${GIT_SHA:-unknown}
       PYTHONPATH: /opt/project
       # Tasks run via `su -m airflow` and inherit root's env unless overridden.
       HOME: /home/airflow
