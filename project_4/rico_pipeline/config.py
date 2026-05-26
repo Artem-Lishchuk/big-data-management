@@ -1,5 +1,6 @@
 import os
 import boto3
+import open_clip
 
 def _env(name: str, default: str) -> str:
     return os.environ.get(name, default)
@@ -41,3 +42,11 @@ def s3_client():
         aws_access_key_id=minio_access_key(),
         aws_secret_access_key=minio_secret_key(),
     )
+
+def clip_client():
+    clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
+        _env("CLIP_ARCH", _env("CLIP_ARCH", "ViT-B-32"))
+        , pretrained=_env("CLIP_PRETRAINED", _env("CLIP_PRETRAINED", "laion2b_s34b_b79k"))
+    )
+    clip_tokenizer = open_clip.get_tokenizer( _env("CLIP_ARCH", _env("CLIP_ARCH", "ViT-B-32")))
+    return clip_model, clip_preprocess, clip_tokenizer

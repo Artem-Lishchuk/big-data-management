@@ -59,7 +59,5 @@ def run_parse(**context):
                 """,
                 (text_rep, screen_id, run_id),
             )
-            preview = text_rep if len(text_rep) <= 80 else text_rep[:77] + "..."
-            print(f"  screen {screen_id:>3}: {len(text_rep)} chars  {preview!r}")
 
         conn.commit()

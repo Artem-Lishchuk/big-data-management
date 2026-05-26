@@ -112,6 +112,8 @@ services:
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
       CLIP_VERSION: ${CLIP_VERSION:-open-clip-ViT-B-32-laion2b-s34b-b79k}
+      CLIP_ARCH: ${CLIP_ARCH:-ViT-B-32}
+      CLIP_PRETRAINED: ${CLIP_PRETRAINED:-laion2b_s34b_b79k}
       SBERT_VERSION: ${SBERT_VERSION:-sentence-transformers/all-MiniLM-L6-v2}
       GIT_SHA: ${GIT_SHA:-unknown}
       PYTHONPATH: /opt/project
