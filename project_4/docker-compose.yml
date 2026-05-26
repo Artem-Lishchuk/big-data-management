@@ -116,6 +116,8 @@ services:
       CLIP_PRETRAINED: ${CLIP_PRETRAINED:-laion2b_s34b_b79k}
       SBERT_VERSION: ${SBERT_VERSION:-sentence-transformers/all-MiniLM-L6-v2}
       GIT_SHA: ${GIT_SHA:-unknown}
+      PROMPT_VERSION: ${PROMPT_VERSION:-1}
+      MIN_CONFIDENCE: ${MIN_CONFIDENCE:-0.10}
       PYTHONPATH: /opt/project
       # Tasks run via `su -m airflow` and inherit root's env unless overridden.
       HOME: /home/airflow

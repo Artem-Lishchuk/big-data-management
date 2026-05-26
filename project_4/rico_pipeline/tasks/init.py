@@ -7,6 +7,7 @@ from rico_pipeline.config import (
     ollama_model,
     postgres_dsn,
     sbert_version,
+    prompt_version
 )
 
 def init_run(**context):
@@ -31,7 +32,7 @@ def init_run(**context):
                     clip_version(),
                     sbert_version(),
                     ollama_model(),
-                    "v1",
+                    f"v{prompt_version()}",
                 ),
             )
         conn.commit()

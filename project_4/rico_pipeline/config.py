@@ -2,6 +2,7 @@ import os
 import boto3
 import open_clip
 from sentence_transformers import SentenceTransformer
+from pathlib import Path
 
 def _env(name: str, default: str) -> str:
     return os.environ.get(name, default)
@@ -35,6 +36,17 @@ def sbert_version() -> str:
 
 def git_sha() -> str:
     return _env("GIT_SHA", "unknown")
+
+def min_confidence() -> float:
+    return float(_env("MIN_CONFIDENCE", "0.5"))
+
+def prompt_version() -> str:
+    return _env("PROMPT_VERSION", "1")
+
+def prompt() -> str:
+    _PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+    path = _PROMPTS_DIR / f"version_{prompt_version()}.txt"
+    return path.read_text(encoding="utf-8")
 
 def s3_client():
     return boto3.client(
