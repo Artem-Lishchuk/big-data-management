@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
+from rico_pipeline.tasks.embed_text import run_embed_text
 from rico_pipeline.tasks.embed_image import run_embed_image
 from rico_pipeline.tasks.ingest import run_ingest
 from rico_pipeline.tasks.init import init_run
@@ -38,10 +39,15 @@ with DAG(
         python_callable=run_embed_image,
     )
 
+    embed_text = PythonOperator(
+        task_id="embed_text",
+        python_callable=run_embed_text,
+    )
+
     finalize = PythonOperator(
         task_id = "finalize",
         python_callable = finalize_run,
         trigger_rule = "all_done"
     )
 
-    init >> ingest >> parse >> embed_image >> finalize
+    init >> ingest >> parse >> [embed_image, embed_text] >> finalize

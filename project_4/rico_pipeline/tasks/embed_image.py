@@ -39,6 +39,7 @@ def run_embed_image(**context):
         image_vectors = clip_model.encode_image(images_tensor)
         image_vectors = image_vectors / image_vectors.norm(dim=-1, keepdim=True)
         image_vectors_np = image_vectors.cpu().numpy().astype("float32")
+    assert image_vectors_np.shape[1] == 512
 
     INSERT_SQL = """
         INSERT INTO screens_embeddings
@@ -53,9 +54,9 @@ def run_embed_image(**context):
     with psycopg.connect(postgres_dsn()) as conn:
         register_vector(conn)
         with conn.cursor() as cur:
-            for sid, vec in zip(sids, image_vectors_np, strict=True):
-                cur.execute(
-                    INSERT_SQL,
-                    (sid, run_id, "open-clip", model_version, "image", vec),
-                )
+            rows = [
+                (sid, run_id, "open-clip", model_version, "image", vec)
+                for sid, vec in zip(sids, image_vectors_np, strict=True)
+            ]
+            cur.executemany(INSERT_SQL, rows)
         conn.commit()

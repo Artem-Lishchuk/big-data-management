@@ -1,6 +1,7 @@
 import os
 import boto3
 import open_clip
+from sentence_transformers import SentenceTransformer
 
 def _env(name: str, default: str) -> str:
     return os.environ.get(name, default)
@@ -50,3 +51,8 @@ def clip_client():
     )
     clip_tokenizer = open_clip.get_tokenizer( _env("CLIP_ARCH", _env("CLIP_ARCH", "ViT-B-32")))
     return clip_model, clip_preprocess, clip_tokenizer
+
+def sbert_client():
+    SBERT_MODEL_VERSION = sbert_version()
+    sbert = SentenceTransformer(SBERT_MODEL_VERSION)
+    return sbert

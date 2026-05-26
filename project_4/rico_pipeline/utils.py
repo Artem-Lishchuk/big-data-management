@@ -31,3 +31,17 @@ def list_screens_for_run(run_id: str) -> list[tuple[int, str]]:
             )
             rows = cur.fetchall()
     return [(int(screen_id), hierarchy_json_path) for screen_id, hierarchy_json_path in rows]
+
+def get_text_representation_by_screen_id(screen_id: int) -> str:
+    with psycopg.connect(postgres_dsn()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT text_representation
+                FROM screens_metadata
+                WHERE screen_id = %s
+                """,
+                (screen_id,),
+            )
+            row = cur.fetchone()
+    return str(row[0])
