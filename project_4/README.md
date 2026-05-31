@@ -127,11 +127,3 @@ Debug: open the `audit` task log, copy the listed keys, query the table.
 Usual causes: (a) recent change to an `ON CONFLICT` path, (b) manual SQL
 that bypassed idempotency.
 
-## Gotchas
-
-| symptom                       | cause                                      | fix                                                                  |
-| ----------------------------- | ------------------------------------------ | -------------------------------------------------------------------- |
-| `make up` times out on airflow | first-boot `pip install` (~2 GB)           | `docker compose logs -f airflow`, wait                               |
-| `llm_extract` 404             | `qwen2.5:3b` not pulled                    | `make pull-models`                                                   |
-| migration didn't apply        | volume already initialised                 | `make clean && make up`, or `docker compose exec -T postgres psql -U rico -d rico < migrations/00X_*.sql` |
-| Slack log missing             | `SLACK_WEBHOOK_URL` set → real webhook used | unset the env var                                                    |
