@@ -101,19 +101,4 @@ ALTER TABLE screens_embeddings
   ADD PRIMARY KEY (screen_id, model_name, model_version, embedding_kind);
 ```
 
-## Reset between experiments
 
-```powershell
-make reset       # truncate data tables + clear MinIO bucket, keep volumes
-make clean       # nuke volumes (forces full re-init incl. migrations)
-make down        # stop services, keep volumes
-```
-
-## Common gotchas
-
-| symptom | cause | fix |
-|---|---|---|
-| `make up` times out on airflow | first-boot `pip install` is slow | `docker compose logs -f airflow` and wait |
-| `llm_extract` returns 404 | `qwen2.5:3b` not pulled | `make pull-models` |
-| Migration 003 didn't apply | volume already initialised | `make clean && make up` or apply by hand: `docker compose exec -T postgres psql -U rico -d rico < migrations/003_tighten_constraints.sql` |
-| Slack log file missing | `SLACK_WEBHOOK_URL` is set (real webhook used) or `logs/` not writable | unset the env var; check `project_4/logs/slack/` exists and is writable |
