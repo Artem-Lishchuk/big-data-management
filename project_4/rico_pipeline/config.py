@@ -56,12 +56,18 @@ def s3_client():
         aws_secret_access_key=minio_secret_key(),
     )
 
+def clip_arch() -> str:
+    return _env("CLIP_ARCH", "ViT-B-32")
+
+def clip_pretrained() -> str:
+    return _env("CLIP_PRETRAINED", "laion2b_s34b_b79k")
+
 def clip_client():
+    arch = clip_arch()
     clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
-        _env("CLIP_ARCH", _env("CLIP_ARCH", "ViT-B-32"))
-        , pretrained=_env("CLIP_PRETRAINED", _env("CLIP_PRETRAINED", "laion2b_s34b_b79k"))
+        arch, pretrained=clip_pretrained()
     )
-    clip_tokenizer = open_clip.get_tokenizer( _env("CLIP_ARCH", _env("CLIP_ARCH", "ViT-B-32")))
+    clip_tokenizer = open_clip.get_tokenizer(arch)
     return clip_model, clip_preprocess, clip_tokenizer
 
 def sbert_client():

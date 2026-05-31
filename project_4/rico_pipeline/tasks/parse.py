@@ -1,4 +1,6 @@
 import json
+import time
+
 import psycopg
 
 from rico_pipeline.config import minio_bucket, postgres_dsn, s3_client
@@ -31,12 +33,15 @@ def parse_hierarchy(raw_json: str) -> list[tuple[str, str, tuple[int, int, int, 
             stack.extend(reversed(children))
     return elements
 
+
 def text_representation(elements: list[tuple[str, str, tuple[int, int, int, int]]]) -> str:
     with_text = [e for e in elements if e[1]]
     in_order = sorted(with_text, key=lambda e: (e[2][1], e[2][0]))
     return " ".join(text for _, text, _ in in_order)
 
+
 def run_parse(**context):
+    t0 = time.monotonic()
     run_id = get_pipeline_run_id(context)
     s3 = s3_client()
     bucket = minio_bucket()
@@ -54,10 +59,15 @@ def run_parse(**context):
             cur.execute(
                 """
                 UPDATE screens_metadata
-                SET text_representation = %s, updated_at = NOW()
-                WHERE screen_id = %s AND run_id = %s
+                   SET text_representation = %s, updated_at = NOW()
+                 WHERE screen_id = %s AND run_id = %s
                 """,
                 (text_rep, screen_id, run_id),
             )
-
         conn.commit()
+
+    return {
+        "rows_in": len(screens),
+        "rows_out": len(screens),
+        "duration_s": time.monotonic() - t0,
+    }

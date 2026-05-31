@@ -1,76 +1,90 @@
-import requests
 import json
+import time
+
 import psycopg
-from rico_pipeline.utils import (
-    get_pipeline_run_id
-    , list_screens_for_run
-    , get_text_representation_by_screen_id
-)
+import requests
 
 from rico_pipeline.config import (
-    prompt
-    , ollama_url
-    , ollama_model
-    , min_confidence
-    , postgres_dsn
-    , prompt_version
+    min_confidence,
+    ollama_model,
+    ollama_url,
+    postgres_dsn,
+    prompt,
+    prompt_version,
+)
+from rico_pipeline.utils import (
+    get_pipeline_run_id,
+    get_text_representations_for_run,
 )
 
-def run_llm_extract(**context):
-    run_id = get_pipeline_run_id(context)
-    screens = list_screens_for_run(run_id)
-    sids = [sid for sid, _ in screens]
 
-    raw_prompt = prompt()
-    OLLAMA_URL = ollama_url()
-    OLLAMA_MODEL = ollama_model()
-    conf_threshold = min_confidence()
-    PROMPT_VERSION = f"v{prompt_version()}"
-
-    UPDATE_EXTRACTION_SQL = """
+UPDATE_EXTRACTION_SQL = """
     UPDATE screens_metadata
-    SET extraction_payload = %s::jsonb,
-        prompt_version     = %s,
-        confidence         = %s,
-        updated_at         = NOW()
-    WHERE screen_id = %s
-    """
+       SET extraction_payload = %s::jsonb,
+           prompt_version     = %s,
+           confidence         = %s,
+           updated_at         = NOW()
+     WHERE screen_id = %s AND run_id = %s
+"""
 
-    INSERT_REVIEW_SQL = """
+INSERT_REVIEW_SQL = """
     INSERT INTO screens_review_queue (run_id, screen_id, reason, raw_output)
     VALUES (%s, %s, %s, %s)
-    """
+"""
 
-    with psycopg.connect(postgres_dsn()) as conn:
-        with conn.cursor() as cur:
-            for sid in sids:
-                text_representation = get_text_representation_by_screen_id(sid)
-                filled_prompt = raw_prompt.replace("{hierarchy_text}", text_representation)
-                raw_output = extract_one(filled_prompt, OLLAMA_URL, OLLAMA_MODEL)
-                payload, reason = _parse_raw_payload(raw_output, conf_threshold)
 
-                if reason:
-                    cur.execute(INSERT_REVIEW_SQL, (run_id, sid, reason, raw_output))
-                else:
-                    body = {k: v for k, v in payload.items() if k != "confidence"}
-                    confidence = float(payload.get("confidence", 0.0))
-                    cur.execute(
-                        UPDATE_EXTRACTION_SQL,
-                        (json.dumps(body), PROMPT_VERSION, confidence, sid),
-                    )
+def run_llm_extract(**context):
+    t0 = time.monotonic()
+    run_id = get_pipeline_run_id(context)
+    texts_by_sid = get_text_representations_for_run(run_id)
+    sids = sorted(texts_by_sid.keys())
+
+    raw_prompt = prompt()
+    url = ollama_url()
+    model = ollama_model()
+    conf_threshold = min_confidence()
+    pv = f"v{prompt_version()}"
+
+    rows_out = 0
+    reviewed = 0
+    with psycopg.connect(postgres_dsn()) as conn, conn.cursor() as cur:
+        for sid in sids:
+            filled = raw_prompt.replace("{hierarchy_text}", texts_by_sid[sid])
+            raw_output = extract_one(filled, url, model)
+            payload, reason = _parse_raw_payload(raw_output, conf_threshold)
+
+            if reason:
+                cur.execute(INSERT_REVIEW_SQL, (run_id, sid, reason, raw_output))
+                reviewed += 1
+            else:
+                body = {k: v for k, v in payload.items() if k != "confidence"}
+                confidence = float(payload.get("confidence", 0.0))
+                cur.execute(
+                    UPDATE_EXTRACTION_SQL,
+                    (json.dumps(body), pv, confidence, sid, run_id),
+                )
+                rows_out += 1
         conn.commit()
 
-def extract_one(prompt, OLLAMA_URL, OLLAMA_MODEL):
+    return {
+        "rows_in": len(sids),
+        "rows_out": rows_out,
+        "reviewed": reviewed,
+        "duration_s": time.monotonic() - t0,
+    }
+
+
+def extract_one(filled_prompt: str, url: str, model: str) -> str:
     response = requests.post(
-        f"{OLLAMA_URL}/api/generate",
-        json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
+        f"{url}/api/generate",
+        json={"model": model, "prompt": filled_prompt, "stream": False},
         timeout=120,
     )
     response.raise_for_status()
-    raw = response.json()["response"]
-    return raw
+    return response.json()["response"]
 
-def _parse_raw_payload(raw, conf_threshold):
+
+def _parse_raw_payload(raw: str, conf_threshold: float):
     text = raw.strip()
 
     if text.startswith("```"):
@@ -85,23 +99,20 @@ def _parse_raw_payload(raw, conf_threshold):
         return None, "invalid_schema"
 
     title = data.get("title", "")
-
     if not isinstance(title, str):
         return None, "invalid_schema"
 
     elements = data.get("elements", [])
-
     if not isinstance(elements, list):
         return None, "invalid_schema"
 
     normalized_elements = []
-
     for el in elements:
         if not isinstance(el, dict):
             continue
-        type, txt = el.get("type"), el.get("text")
-        if isinstance(type, str) and isinstance(txt, str):
-            normalized_elements.append({"type": type, "text": txt})
+        et, txt = el.get("type"), el.get("text")
+        if isinstance(et, str) and isinstance(txt, str):
+            normalized_elements.append({"type": et, "text": txt})
 
     try:
         confidence = float(data.get("confidence", 0.0))

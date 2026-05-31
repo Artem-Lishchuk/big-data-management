@@ -1,4 +1,5 @@
 import uuid
+
 import psycopg
 
 from rico_pipeline.config import (
@@ -6,12 +7,15 @@ from rico_pipeline.config import (
     git_sha,
     ollama_model,
     postgres_dsn,
+    prompt_version,
     sbert_version,
-    prompt_version
 )
+from rico_pipeline.slack import notify_run_started
+
 
 def init_run(**context):
-    dag_run_id = context["dag_run"].run_id
+    dag_run = context["dag_run"]
+    dag_run_id = dag_run.run_id
     run_uuid = uuid.uuid4()
     limit = context["params"].get("limit")
 
@@ -21,7 +25,8 @@ def init_run(**context):
                 """
                 INSERT INTO pipeline_runs (
                     run_id, dag_run_id, status, limit_param,
-                    git_sha, clip_version, sbert_version, llm_model, prompt_version
+                    git_sha, clip_version, sbert_version,
+                    llm_model, prompt_version
                 ) VALUES (%s, %s, 'running', %s, %s, %s, %s, %s, %s)
                 """,
                 (
@@ -37,4 +42,6 @@ def init_run(**context):
             )
         conn.commit()
 
+    trigger = getattr(dag_run, "run_type", "manual") or "manual"
+    notify_run_started(str(run_uuid), limit, trigger)
     return str(run_uuid)
