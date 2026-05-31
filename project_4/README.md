@@ -1,100 +1,119 @@
-# Project 4 — RICO Multimodal Pipeline Lab
-## First-time setup
+# Runbook — run & verify the pipeline
 
-All commands below are run from the `project_4/` directory.
+Quick, copy-pasteable. For the conceptual overview see `README.md`.
 
-### 1. Start the infrastructure
-
-```bash
-make up
-```
-
-**Without Make (Windows / no `make` installed):**
-
-```bash
-docker compose up -d --wait postgres minio ollama
-docker compose up -d minio-init ollama-init
-docker compose up -d --wait airflow
-```
-
-### 2. Create and activate a Python virtual environment
-
-```bash
-python -m venv .venv-lab
-```
-
-**Linux / macOS:**
-
-```bash
-source .venv-lab/bin/activate
-```
-
-**Windows (PowerShell):**
+## Run
 
 ```powershell
-.venv-lab\Scripts\Activate.ps1
+make clean && make up        # first time, or after migration changes
+make pull-models             # one-time: pulls qwen2.5:3b into Ollama (~2 GB)
+make airflow-install         # only after editing pyproject.toml
 ```
 
-Your shell prompt should show `(.venv-lab)`.
+First `make up` may time out on the Airflow healthcheck — that's normal,
+the `pip install -e /opt/project` is still running. Watch it finish with:
 
-### 3. Install Python dependencies
-
-All Python packages are declared in `pyproject.toml`:
-
-```bash
-pip install --upgrade pip
-pip install -e ".[dev]"
+```powershell
+docker compose logs -f airflow
 ```
 
-The install is large (~2–3 GB) because of PyTorch and the embedding models.
+When you see the webserver banner, open <http://localhost:8080>
+(admin / admin) → trigger `project_4_dag` with config `{"limit": 5}`.
 
-Airflow installs the same project automatically on first container start (`pip install -e /opt/project`).
-Re-run `make airflow-install` after you change dependencies in `pyproject.toml`.
+## Useful shells
 
-### 4. Open the lab notebook
-
-```bash
-jupyter lab notebook.ipynb
+```powershell
+docker compose exec postgres psql -U rico -d rico   # SQL
+docker compose exec ollama ollama list              # which LLMs are loaded
+docker compose exec airflow bash                    # poke around Airflow container
+docker compose logs -f <service>                    # tail any container
 ```
 
-If Jupyter asks for a token, copy it from the terminal output or open the `http://localhost:8888/lab?token=…` URL it prints.
+## Verify a run
 
-Run the notebook top to bottom. Section 0 pings each service — fix your stack before continuing if any health check fails.
+After the DAG goes all-green, open psql and run:
 
----
+```sql
+-- 1. Run record
+SELECT run_id, status, limit_param, started_at, ended_at
+  FROM pipeline_runs ORDER BY started_at DESC LIMIT 1;     -- status='success'
 
-## Day-to-day usage
+-- 2. Row counts
+SELECT COUNT(*) FROM screens_metadata;                     -- 5
+SELECT embedding_kind, COUNT(*)
+  FROM screens_embeddings GROUP BY embedding_kind;         -- image=5, text=5
 
-**Start working** (containers were stopped):
+-- 3. DoD: no nulls in required columns
+SELECT COUNT(*) FROM screens_metadata   WHERE run_id IS NULL;             -- 0
+SELECT COUNT(*) FROM screens_embeddings WHERE run_id IS NULL;             -- 0
+SELECT COUNT(*) FROM screens_metadata   WHERE source_fingerprint IS NULL; -- 0
+SELECT COUNT(*) FROM screens_embeddings WHERE source_fingerprint IS NULL; -- 0
 
-```bash
-make up
-source .venv-lab/bin/activate   # or .venv-lab\Scripts\Activate.ps1 on Windows
-jupyter lab notebook.ipynb
+-- 4. Audit passed
+SELECT audit_name, passed FROM audit_results;              -- both true
+
+-- 5. Eval ran
+SELECT run_id, n_queries, recall_at_5 FROM screens_eval;
+
+-- 6. Metrics
+SELECT COUNT(*) FROM pipeline_metrics
+  WHERE run_id = (SELECT run_id FROM pipeline_runs ORDER BY started_at DESC LIMIT 1);
+
+-- 7. LLM extractions
+SELECT screen_id, confidence, extraction_payload->>'title' AS title
+  FROM screens_metadata;
+SELECT COUNT(*) FROM screens_review_queue;                 -- 0..5
 ```
 
-**Reset lab data** (replay the notebook on a clean slate — tables truncated, bucket cleared; models and volumes kept):
+**MinIO:** <http://localhost:9001> (minioadmin / minioadmin) → bucket
+`rico-raw` → 5 PNG + 5 JSON under `screens/`.
 
-```bash
-make reset
+**Slack mock:** `project_4/logs/slack/<YYYY-MM-DD>.log` — one
+`run_started` and one `run_finished` line per run.
+
+## Verify idempotency
+
+Trigger the DAG again with the same `{"limit": 5}`. Re-run the row-count
+queries above — numbers must be **identical**. Only `pipeline_runs` and
+`pipeline_metrics` grow.
+
+## Verify audit halt
+
+Force a duplicate, then trigger the DAG:
+
+```sql
+ALTER TABLE screens_embeddings DROP CONSTRAINT screens_embeddings_pkey;
+INSERT INTO screens_embeddings
+  (screen_id, run_id, model_name, model_version, embedding_kind, vector, source_fingerprint)
+SELECT screen_id, run_id, model_name, model_version, embedding_kind, vector, 'forced-dup'
+  FROM screens_embeddings LIMIT 1;
 ```
 
-Then in Jupyter: **Kernel → Restart**, and run all cells again.
+Expected: `audit` red, `eval` skipped, `finalize` green,
+`pipeline_runs.status='failed'`, `audit_results.passed=false`,
+extra `audit_failed` line in `logs/slack/*.log`.
 
-**Stop the stack** (data preserved in Docker volumes):
+Cleanup:
 
-```bash
-make down
+```sql
+DELETE FROM screens_embeddings WHERE source_fingerprint = 'forced-dup';
+ALTER TABLE screens_embeddings
+  ADD PRIMARY KEY (screen_id, model_name, model_version, embedding_kind);
 ```
 
-**Full wipe** (delete all volumes — next `make up` re-runs DB migrations and re-pulls the Ollama model):
+## Reset between experiments
 
-```bash
-make clean
+```powershell
+make reset       # truncate data tables + clear MinIO bucket, keep volumes
+make clean       # nuke volumes (forces full re-init incl. migrations)
+make down        # stop services, keep volumes
 ```
 
-**Tail service logs:**
+## Common gotchas
 
-```bash
-make logs
-```
+| symptom | cause | fix |
+|---|---|---|
+| `make up` times out on airflow | first-boot `pip install` is slow | `docker compose logs -f airflow` and wait |
+| `llm_extract` returns 404 | `qwen2.5:3b` not pulled | `make pull-models` |
+| Migration 003 didn't apply | volume already initialised | `make clean && make up` or apply by hand: `docker compose exec -T postgres psql -U rico -d rico < migrations/003_tighten_constraints.sql` |
+| Slack log file missing | `SLACK_WEBHOOK_URL` is set (real webhook used) or `logs/` not writable | unset the env var; check `project_4/logs/slack/` exists and is writable |
